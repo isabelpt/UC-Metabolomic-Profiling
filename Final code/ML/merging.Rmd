@@ -1,0 +1,64 @@
+---
+title: "W with Linda: COVID Autoantibodies"
+author: "Data analyst: XL"
+date: "2022-12-10"
+output: html_document
+---
+
+load selected IBD meta data
+```{r, echo=FALSE}
+IBD_data_select <- read.csv("~/Desktop/stanford/usefulData/200n/large_samp_metadata.csv")
+print("process complete!")
+```
+
+load IBD metabolomics data
+```{r, echo=FALSE}
+library(data.table)
+IBD_data_metabo <- fread("~/Desktop/stanford/HMP2_metabolomics.csv")
+print("process complete!")
+```
+
+transpose data
+```{r, echo=FALSE, message=FALSE}
+# transpose a data.table
+library(data.table)
+# function for transpose a data.table
+tdt <- function(inpdt){
+  transposed <- t(inpdt[,-1]);
+  colnames(transposed) <- inpdt[[1]];
+  transposed <- data.table(transposed, keep.rownames=T);
+  setnames(transposed, 1, names(inpdt)[1]);
+  return(transposed);
+}
+
+# Apply the function:
+T_IBD_data_metabo <- tdt(IBD_data_metabo)
+dim(IBD_data_metabo)
+print("data transpose in progress ...")
+dim(T_IBD_data_metabo)
+print("data transpose complete!")
+```
+
+```{r, echo=FALSE, message=FALSE}
+
+library(dplyr)
+library(tidyr)
+
+df <- T_IBD_data_metabo[-c(1:6), ]
+colnames(df)[1] <- "External.ID"
+
+# joint daf1 and df2 with "External.ID"
+df2 <- merge(IBD_data_select, df, by="External.ID")
+
+# save merged file
+write.csv(df, file = "T_IBD_data_metabo_UC.csv")
+```
+
+```{r}
+T_IBD_data_metabo <- tdt(IBD_data_metabo)
+dim(IBD_data_metabo)
+print("data transpose in progress ...")
+dim(T_IBD_data_metabo)
+print("data transpose complete!")
+```
+

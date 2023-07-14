@@ -1,0 +1,30 @@
+---
+title: "GGPlot Barplot"
+author: "Isabel Prado-Tucker"
+date: "2023-02-23"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+
+df <- read_csv("~/Desktop/stanford/usefulData/bio_data.csv")
+df1 <- df[1:35, ]
+
+pdf('GGPlot_Barplot.pdf')
+f <- ggplot(df1, aes(x = reorder(Compound,-Freq), Freq)) + 
+# Basic bar plot 
+  geom_col(fill = "#0073C2FF") + 
+  labs(x='Name', y='Freq') + 
+  geom_hline(    
+    yintercept = 0.8,    
+    color = '#EF4135',
+    linetype = "dashed",     
+    linewidth = 0.8) +  
+#  theme_bw() +
+  theme(axis.text.x=element_text(angle=75, vjust=0.5, hjust=0.5))
+f
+```

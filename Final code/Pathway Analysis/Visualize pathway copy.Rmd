@@ -1,0 +1,56 @@
+---
+title: "Visualize pathway"
+author: "Xiangping Lin"
+date: "2023-02-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(readr)
+df <- read.csv("~/Desktop/Download_peaks/mummichog_pathway_enrichment 2.csv")
+```
+
+```{r}
+# The enrichment ratio is calculated as the number of hits within a particular metabolic pathway divided by the expected number of hits.
+# pdf('N_metabolic_pathway_r.pdf')
+p <- ggplot(df, aes(x = Enrichment_ratio, 
+                    y = Name, 
+                    colour = Gamma, 
+                    size = Hits.sig)
+            )  +
+        labs(x="Enrichment ratio", 
+             y="Pathway name", 
+             colour="adj. p-value", 
+             size="Overlap significant"
+             ) + geom_point() + scale_radius(breaks =c(20,30,50,70)) + scale_fill_manual(values = )
+p
+```
+
+```{r}
+metabo_meta <- read_csv("~/Desktop/stanford/usefulData/100n/metabo_meta.csv")
+library(data.table)
+
+#transpose data frame
+meta_t <- transpose(metabo_meta)
+```
+```{r}
+features <- read_csv("~/Desktop/stanford/usefulData/features_comp1.csv")
+```
+
+```{r}
+features$Var1 <- gsub('X', '', features$Var1)
+```
+
+```{r}
+imp_col <- meta_t[c("V3", "V4", "V7")]
+```
+
+```{r}
+imp_rows <- imp_col[features$Var1,]
+```
+
+```{r}
+final <- cbind(features, imp_rows)
+```
+

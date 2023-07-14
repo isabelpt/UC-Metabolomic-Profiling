@@ -1,0 +1,313 @@
+---
+title: "Ulcerative Colitis Metabolomics sPLSDA"
+author: "Isabel Prado-Tucker"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+### Data source: (The Inflammatory Bowel Disease Multi'omics Database)[https://ibdmdb.org/]
+
+### Data selection: n=120 (60 UC and 60 nonIBD samples selected with M/F split). Only C8-pos method data selected from metabolomic dataset.
+
+### Data preparation: Selected data was run through xmsPanda regression analysis to determine selected features. This analysis is performed on the regression selected features data.
+
+```{r, include=FALSE}
+library(data.table)
+library(mixOmics)
+set.seed(5249) # for reproduction
+```
+
+```{r, include=FALSE}
+# Prepare and import data
+metab_sf <- fread("~/Desktop/stanford/usefulData/100n/UC_120_lmregresults_selectedfeatures.csv")
+samples <- fread("~/Desktop/stanford/usefulData/100n/sample_metadata.csv") # Selected samples
+diag <- as.factor(samples$diagnosis)
+```
+
+```{r, include=FALSE}
+# Flip metabo data 
+flipped_metabo <- as.data.frame(t(metab_sf))
+
+# Only select matrix
+flipped_metabo <- flipped_metabo[7:nrow(flipped_metabo),]
+
+# Convert to matrix
+metab_matrix <- as.matrix(flipped_metabo) # Stop at 1:71
+metab <- matrix(as.numeric(metab_matrix), ncol = ncol(metab_matrix))
+metab <- setNames(metab, colnames(metab_matrix))
+colnames(metab) <- colnames(metab_matrix)
+colnames(metab) <- sub("V", "X", colnames(metab))
+
+dim(metab)
+```
+
+```{r, include=FALSE}
+library(dplyr)
+set.seed(5249)
+train <- sample(c(TRUE, FALSE), nrow(metab), replace=TRUE, prob=c(0.6,0.4))
+
+# store matrices into training and test set:
+metab.train <- metab[train, ]
+metab.test <- metab[!train,]
+diag.train <- diag[train]
+diag.test <- diag[!train]
+```
+
+***
+
+## Initial sPLS-DA model
+
+#### FIGURE 1: Barplot of the variance each principal component explains of the UC metabolomic data.
+
+```{r echo=FALSE}
+pca.metabo = pca(metab, ncomp = 10, center = TRUE, scale = TRUE) # run pca method on data
+plot(pca.metabo)  # barplot of the eigenvalues (explained variance per component)
+```
+```{r}
+plotLoadings(pca.metabo) # plot the bar plot for the first principal component
+
+# plot the bar plot for the second principal component
+plotLoadings(pca.metabo, comp = 2) 
+```
+
+#### FIGURE 2: Preliminary (unsupervised) analysis with PCA on the UC metabolomic data
+
+```{r echo=FALSE}
+plotIndiv(pca.metabo, group = diag, ind.names = FALSE, # plot the samples projected
+  legend = TRUE, title = 'PCA on Metabolomics, comp 1 - 2') # onto the PCA subspace
+```
+
+```{r, include=FALSE}
+metabo.splsda <- splsda(metab, diag, ncomp = 10)  # set ncomp to 10 for performance assessment later
+```
+
+```{r}
+# plot the bar plot using the highest value of the median to colour the bars
+plotLoadings(metabo.splsda, contrib = 'max', method = 'median') 
+```
+
+```{r, include=FALSE}
+# use the max.dist measure to form decision boundaries between classes based on PLS-DA data
+background = background.predict(metabo.splsda, comp.predicted=2, dist = "max.dist")
+```
+
+#### FIGURE 3: Sample plots of the UC metabolomic data after a basic PLS-DA model was operated on this data.
+
+```{r, echo=FALSE}
+# plot the samples projected onto the first two components of the PLS-DA subspace
+plotIndiv(metabo.splsda , comp = 1:2, 
+    group = diag, ind.names = FALSE,  # colour points by class
+    ellipse = TRUE, # include 95% confidence ellipse for each class
+    legend = TRUE, title = '(a) PLSDA with confidence ellipses')
+
+# plot the samples projected onto the first two components of the PLS-DA subspace
+plotIndiv(metabo.splsda, comp = 1:2,
+          group = diag, ind.names = FALSE, # colour points by class
+          background = background, # include prediction background for each class
+          legend = TRUE, title = " (b) PLSDA with prediction background")
+```
+
+***
+
+### Tuning sPLS-DA
+
+```{r, echo=FALSE}
+# undergo performance evaluation in order to tune the number of components to use
+perf.splsda.metabo <- perf(metabo.splsda, validation = "Mfold", 
+                          folds = 10, nrepeat = 50, # use repeated cross-validation # increase folds and repeat for accuracy
+                          progressBar = FALSE, auc = TRUE) # include AUC values
+
+# plot the outcome of performance evaluation across all ten components
+plot(perf.splsda.metabo, col = color.mixo(5:7), sd = TRUE,
+     legend.position = "horizontal")
+```
+
+```{r, include=FALSE}
+perf.splsda.metabo$choice.ncomp # what is the optimal value of components according to perf()
+```
+
+#### FIGURE 4: Tuning the number of components in PLS-DA on the UC metabolomic data
+
+```{r}
+# grid of possible keepX values that will be tested for each component
+list.keepX <- c(1:10,  seq(20, 300, 10))
+
+# undergo the tuning process to determine the optimal number of variables
+tune.splsda.metabo <- tune.splsda(metab, diag, ncomp = 4, # calculate for first 4 components 
+                                 validation = 'Mfold',
+                                 folds = 10, nrepeat = 50, # use repeated cross-validation
+                                 dist = 'max.dist', # use max.dist measure
+                                 measure = "BER", # use balanced error rate of dist measure
+                                 test.keepX = list.keepX,
+                                 cpus = 2) # allow for paralleliation to decrease runtime
+
+plot(tune.splsda.metabo, col = color.jet(4)) # plot output of variable number tuning # Had to change to 3 to reflect ncomp value
+```
+
+```{r, include=FALSE}
+tune.splsda.metabo$choice.ncomp$ncomp # what is the optimal value of components according to tune.splsda()
+```
+
+```{r, include=FALSE}
+tune.splsda.metabo$choice.keepX # what are the optimal values of variables according to tune.splsda()
+```
+
+```{r, include=FALSE}
+optimal.ncomp <- tune.splsda.metabo$choice.ncomp$ncomp
+optimal.keepX <- tune.splsda.metabo$choice.keepX[1:optimal.ncomp] # Originally [1:optimal.ncomp]
+```
+
+***
+
+## Creating the final model
+
+```{r, include=FALSE}
+# form final model with optimised values for component and variable count
+final.splsda <- splsda(metab, diag, 
+                       ncomp = optimal.ncomp, #suppesed to be optimal.ncomp (1)
+                       keepX = optimal.keepX)
+```
+
+```{r, echo=FALSE}
+plotIndiv(final.splsda, comp = c(1,1), # plot samples from final model, c(1,2)
+          group = diag, ind.names = FALSE, # colour by class label
+          ellipse = TRUE, legend = TRUE, # include 95% confidence ellipse
+          title = 'sPLS-DA on UC, comp 1')
+
+plotIndiv(final.splsda, comp = c(1,2), # plot samples from final model, c(1,2)
+          group = diag, ind.names = FALSE, # colour by class label
+          ellipse = TRUE, legend = TRUE, # include 95% confidence ellipse
+          title = 'sPLS-DA on UC, comp 1 - 2')
+
+plotIndiv(final.splsda, comp = c(1,3), # plot samples from final model, c(1,2)
+          group = diag, ind.names = FALSE, # colour by class label
+          ellipse = TRUE, legend = TRUE, # include 95% confidence ellipse
+          title = 'sPLS-DA on UC, comp 1 - 3')
+```
+```{r}
+# set the styling of the legend to be homogeneous with previous plots
+legend=list(legend = levels(diag), # set of classes
+            col = unique(color.mixo(diag)), # set of colours
+            title = "Tumour Type", # legend title
+            cex = 0.7) # legend size
+# Need to open X11() and expand window
+# generate the CIM, using the legend and colouring rows by each sample's class
+cim <- cim(final.splsda, row.sideColors = color.mixo(diag), 
+           legend = legend)
+```
+
+```{r, echo=FALSE}
+# form new perf() object which utilises the final model
+perf.splsda.metabo <- perf(final.splsda, 
+                          folds = 5, nrepeat = 10, # use repeated cross-validation
+                          validation = "Mfold", dist = "max.dist",  # use max.dist measure
+                          progressBar = FALSE)
+
+# plot the stability of each feature for the first component, 'h' type refers to histogram
+plot(perf.splsda.metabo$features$stable[[1]], type = 'h', 
+     ylab = 'Stability', 
+     xlab = 'Features', 
+     main = '(a) Comp 1', las = 2)
+
+plot(perf.splsda.metabo$features$stable[[2]], type = 'h', 
+     ylab = 'Stability', 
+     xlab = 'Features', 
+     main = '(b) Comp 2', las = 2)
+
+plot(perf.splsda.metabo$features$stable[[3]], type = 'h', 
+     ylab = 'Stability', 
+     xlab = 'Features', 
+     main = '(c) Comp 3', las = 2)
+```
+```{r}
+#var.name.short <- substr(srbct$gene.name[, 2], 1, 10) # form simplified gene names
+
+plotVar(final.splsda, comp = c(1,2), var.names = list(diag), cex = 3) # generate correlation circle plot
+```
+```{r}
+plotVar(final.splsda, comp = c(1,3), var.names = list(diag), cex = 3) # generate correlation circle plot
+```
+```{r}
+library(rgl)
+# undergo the pca method
+scale.pca.metab <- pca(metab, ncomp = 3, center = TRUE, scale = TRUE) 
+
+plotVar(scale.pca.metab, style = '3d') # plot a basic 3D correlation sphere plot
+```
+
+------------------------------------------------------------------------
+
+### Training the model
+
+```{r, include=FALSE}
+# train the model
+train.splsda.metabo <- splsda(metab.train, diag.train, ncomp = optimal.ncomp, keepX = optimal.keepX) 
+```
+
+```{r, include=FALSE}
+# use the model on the Xtest set
+predict.splsda.metabo <- predict(train.splsda.metabo, metab.test, 
+  dist = "mahalanobis.dist")
+```
+
+#### Confusion matrix
+
+```{r, include=FALSE}
+# evaluate the prediction accuracy for the first two components
+predict.comp <- predict.splsda.metabo$class$mahalanobis.dist[,3]
+cmatrix <- table(factor(predict.comp, levels = levels(diag)), diag.test)
+```
+
+
+```{r}
+knitr::kable(cmatrix, format = "simple", caption = "Confusion matrix")
+```
+```{r, echo=FALSE}
+library(caret)
+confusionMatrix(factor(predict.comp, levels = levels(diag)), diag.test, positive = "UC")
+```
+### Performance plots
+
+```{r}
+library(ConfusionTableR)
+ConfusionTableR::binary_visualiseR(train_labels = factor(predict.comp, levels = levels(diag)),
+                                   truth_labels= diag.test,
+                                   class_label1 = "nonIBD", 
+                                   class_label2 = "UC",
+                                   quadrant_col1 = "#175E54", 
+                                   quadrant_col2 = "#8C1515", 
+                                   custom_title = "Confusion Matrix", 
+                                   text_col= "black"
+                                   )
+```
+
+
+```{r, echo=FALSE}
+auc.splsda = auroc(final.splsda, roc.comp = 1, print = FALSE) # AUROC for the first component
+auc.splsda = auroc(final.splsda, roc.comp = 3, print = FALSE) # AUROC for the three components
+```
+
+***
+
+## Odds ratio for possible confounding variables
+```{r}
+# Primary variables of interest: consent_age, sex, race
+
+library(MASS)
+has_UC <- ifelse(diag == 'UC', 1, 0)
+model= glm(formula = has_UC ~ samples$sex, family=binomial)
+exp(cbind("Odds ratio" = coef(model), confint.default(model, level = 0.95)))
+
+model= glm(formula = has_UC ~ samples$consent_age, family=binomial)
+exp(cbind("Odds ratio" = coef(model), confint.default(model, level = 0.95)))
+
+model= glm(formula = has_UC ~ samples$race, family=binomial)
+exp(cbind("Odds ratio" = coef(model), confint.default(model, level = 0.95)))
+```
+

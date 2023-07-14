@@ -1,0 +1,60 @@
+---
+title: "join() function in dplyr package"
+author: "Xiangping Lin"
+date: "11/29/2021"
+output: html_document
+---
+
+###### install dplyr package ######
+
+# dplyr is part of tidyverse package:
+install.packages("tidyverse")
+
+# Alternatively, install just dplyr:
+#install.packages("dplyr")
+
+# Or the development version from GitHub:
+# install.packages("devtools")
+#devtools::install_github("tidyverse/dplyr")
+
+```{r, echo = FALSE}
+# load packages("dplyr" and "tidyr")
+library(dplyr)
+library(tidyr)
+
+# data df1 (output of feature selection from xmsPANDA, please refer to the example file) input location
+df <- read.delim("lmreg_pval_coef_stderr.txt")
+
+# data df2 (please refer to the example file) input location
+df1 <- readxl::read_excel("Mitra_FF_RP_annotated_peaklist.xlsx", sheet = 2)
+
+# joint daf1 and df2 with "mz"
+df2 <- df1 %>% right_join(df,by="mz_key")
+
+# remove rows that contain NA
+df3 <- df2 %>% drop_na()
+
+# review joint result#View(df)# save joint result df into a sepcial location.# write.csv(df, file = "lmreg_cov_p_coef_sd.csv")# save pos joint result df into a sepcial location.#pos.sub <- subset(df, Polarity == "C18pos")#write.csv(pos.sub, file = "lmreg_cov_p_coef_sd.csv")# save neg joint result df into a sepcial location.#neg.sub <- subset(df, Polarity == "C18neg")#write.csv(neg.sub, file = "lmreg_cov_p_coef_sd.csv")
+
+write.csv(df3, file = "Mitra_FF_RP_A_C_MWAS_lmreg_cov_p_coef_sd.csv")
+
+# message (finish)
+print("Process completed successfully!")
+```
+
+```{r, echo = FALSE}
+# Prepare data for Mummichog
+df4 <- read.csv("Mitra_FF_RP_A_C_MWAS_lmreg_cov_p_coef_sd.csv")
+
+# remove unnecessary columns
+df5 <- df4[ , c('mz', 'polarity' ,'Estimate_Class','FDR.adjusted.pvalue_Class','rt')]
+
+# assigning new names to the columns of the data frame
+colnames(df5) <- c('m.z','mode','t.score','p.value','r.t')
+
+# review joint result# View(df)
+data.table::fwrite(df5, file = "Mitra_FF_RP_A_C_mix_reg_cov_mz_rt_adjp_Estimate.txt", sep=";",col.names = T, row.names = FALSE)
+# message (finish)
+print ("Process completed successfully!")
+print ("The data is Ready for Functional analysis using MetaboAnalyst (Mummichog)!")
+```
